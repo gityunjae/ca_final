@@ -69,7 +69,7 @@ def load_spectrograms(item_ids, enc=True):
             if melspec.shape[1]< 1876:
                 print (melspec.shape)
             else:
-                list_spectrograms.append(melspec[:,:1876])
+                list_spectrograms.append(melspec[:40,:1876])
                 ret_ids.append(p)
         else:
             print ("File not exists", filename)
@@ -154,7 +154,7 @@ def SubSpec(input_shape, n_mels, normalize, nb_hidden, dense_units,
         neurons = neurons / 2
 
     # softmax -- GLOBAL CLASSIFIER
-    out = Dense(output_shape, activation=activation)(x)
+    x = Dense(output_shape, activation=activation)(x)
     # Create model
     model = Model(inputLayer, x)
 
@@ -449,9 +449,11 @@ def batch_block_generator(train_set, item_vecs_reg, batch_size=32, dimms="200"):
             msdid_block = train_set[i:min(n_train, i+block_step)]
             if os.path.exists(npy_train_mtrx_y):
                 x_block = np.load(npy_train_mtrx_x)
+                x_block = x_block[:, :40, :, :]  #####
                 y_block = np.load(npy_train_mtrx_y)
             else:
                 x_block, loaded_positions = load_spectrograms(msdid_block)
+                x_block = x_block[:,:40,:,:] #####
                 y_block = item_vecs_reg[[i+p for p in loaded_positions]]
                 np.save(npy_train_mtrx_x, x_block)
                 np.save(npy_train_mtrx_y, y_block)
