@@ -20,10 +20,6 @@ import keras
 import tensorflow
 from tensorflow.keras import optimizers
 from keras import backend as K
-from keras.models import Sequential, Model
-from keras.layers import Input, Convolution2D, MaxPooling2D, Dense, Dropout, Activation, Flatten, merge
-from keras.layers import BatchNormalization
-from keras.layers.advanced_activations import ELU, ReLU
 
 # Machine Learning preprocessing and evaluation
 from sklearn.model_selection import train_test_split
@@ -78,8 +74,7 @@ def load_spectrograms(item_ids, enc=True):
     item_list = add_channel(item_list)
     return item_list, ret_ids
 
-def SubSpec(input_shape, n_mels, normalize, nb_hidden, dense_units,
-               output_shape, activation, dropout):
+def SubSpec(input_shape, output_shape, activation, dropout):
     ##melSize = Input(shape=input_shape)
     #melSize = x_train.shape[1]
     # Sub-Spectrogram Size
@@ -93,20 +88,21 @@ def SubSpec(input_shape, n_mels, normalize, nb_hidden, dense_units,
     #melSize = 48
     ####### Generate the model ###########
     #inputLayer = Input((melSize, timeInd, channels))
+
     inputLayer = Input(shape=input_shape)
     melSize = inputLayer.shape[1]
     subSize = int(splitSize / 10)
     i = 0
     outputs = []
     toconcat = []
-    while (overlap * i <= melSize - splitSize):    # 48 - 20 = 28, i=3
+    while (overlap * i <= melSize - splitSize):    # 40 - 20 = 28, i=3
         # Create Sub-Spectrogram
-        INPUT = Lambda(lambda inputLayer: inputLayer[:, i * overlap:i * overlap + splitSize, :, :],
-                       output_shape=(splitSize, timeInd, channels))(inputLayer)
+        INPUT = Lambda(lambda inputLayer: inputLayer[:, i * overlap:i * overlap + 20, :, :],
+                       output_shape=(20, 1876, 1))(inputLayer)
 
         # First conv-layer -- 32 kernels
         CONV = Conv2D(32, kernel_size=(7, 7), padding='same', kernel_initializer="he_normal")(INPUT)
-        CONV = BatchNormalization(axis=1)(CONV)
+        CONV = BatchNormalization(axis=1, name='bn1'+str(i))(CONV)
         CONV = Activation('relu')(CONV)
 
         # Max pool by SubSpectrogram <mel-bin>/10 size. For example for sub-spec of 30x500, max pool by 3 vertically.
@@ -116,7 +112,7 @@ def SubSpec(input_shape, n_mels, normalize, nb_hidden, dense_units,
         # Second conv-layer -- 64 kernels
         CONV = Conv2D(64, kernel_size=(7, 7), padding='same',
                       kernel_initializer="he_normal")(CONV)
-        CONV = BatchNormalization(axis=1)(CONV)
+        CONV = BatchNormalization(axis=1, name='bn2'+str(i))(CONV)
         CONV = Activation('relu')(CONV)
 
         # Max pool
@@ -160,256 +156,6 @@ def SubSpec(input_shape, n_mels, normalize, nb_hidden, dense_units,
 
     return model
 
-'''
-def HCNN(input_shape, normalize, nb_hidden, dense_units,
-               output_shape, activation, dropout):
-    # CNN using 1xm Horizontal filter
-    # use two filters of different size and do depth-wise concatenation, and go through another conv
-    # input: (48, 1876)
-    melgram_input = Input(shape=input_shape)
-
-    # Determine input axis
-    if keras.backend.image_data_format() == 'th':
-        channel_axis = 1
-        freq_axis = 2
-        time_axis = 3
-    else:
-        channel_axis = 3
-        freq_axis = 1
-        time_axis = 2
-
-    # Input block
-    x = BatchNormalization(axis=channel_axis, name='bn_0_freq')(melgram_input)
-
-    if normalize == 'batch':
-        pass
-    elif normalize in ('data_sample', 'time', 'freq', 'channel'):
-        x = Normalization2D(normalize, name='nomalization')(melgram_input)
-    elif normalize in ('no', 'False'):
-        x = melgram_input
-
-    # Conv 10 times..?
-    x1 = Convolution2D(1, 16)(x)
-    x1 = BatchNormalization(axis=channel_axis, name='bn1')(x1)
-    x1 = ReLU()(x1)
-    x2 = Convolution2D(1, 26)(x)
-    x2 = BatchNormalization(axis=channel_axis, name='bn2')(x2)
-    x2 = ReLU()(x2)
-    x3 = Convolution2D(1, 50)(x)
-    x3 = BatchNormalization(axis=channel_axis, name='bn3')(x3)
-    x3 = ReLU()(x3)
-    x4 = Convolution2D(1, 76)(x)
-    x4 = BatchNormalization(axis=channel_axis, name='bn4')(x4)
-    x4 = ReLU()(x4)
-    x5 = Convolution2D(1, 96)(x)
-    x5 = BatchNormalization(axis=channel_axis, name='bn5')(x5)
-    x5 = ReLU()(x5)
-    x6 = Convolution2D(1, 120)(x)
-    x6 = BatchNormalization(axis=channel_axis, name='bn6')(x6)
-    x6 = ReLU()(x6)
-    x7 = Convolution2D(1, 146)(x)
-    x7 = BatchNormalization(axis=channel_axis, name='bn7')(x7)
-    x7 = ReLU()(x7)
-    x8 = Convolution2D(1, 170)(x)
-    x8 = BatchNormalization(axis=channel_axis, name='bn8')(x8)
-    x8 = ReLU()(x8)
-    x9 = Convolution2D(1, 196)(x)
-    x9 = BatchNormalization(axis=channel_axis, name='bn9')(x9)
-    x9 = ReLU()(x9)
-    x10 = Convolution2D(1, 220)(x)
-    x10 = BatchNormalization(axis=channel_axis, name='bn10')(x10)
-    x10 = ReLU()(x10)
-
-    # concat 10 results..?
-    x = torch.cat([x1, x2, x3, x4, x5, x6, x7, x8, x9, x10], dim=2)
-
-    x = MaxPooling2D(pool_size=(10, 4), name='pool1')(x)
-
-    # 2nd Conv
-    x = Convolution2D(7, 7)(x)
-    x = BatchNormalization(axis=channel_axis, name='bn22')(x)
-    x = ReLU()(x)
-    x = MaxPooling2D(pool_size=(2, 2), name='pool2')(x)
-
-    return x
-
-def PCNN(input_shape, normalize, nb_hidden, dense_units,
-               output_shape, activation, dropout):
-    # CNN using nx1 Vertical filter
-    # use two filters of different size and do depth-wise concatenation, and go through another conv
-    melgram_input = Input(shape=input_shape)
-
-    # Determine input axis
-    if keras.backend.image_data_format() == 'th':
-        channel_axis = 1
-        freq_axis = 2
-        time_axis = 3
-    else:
-        channel_axis = 3
-        freq_axis = 1
-        time_axis = 2
-
-    # Input block
-    x = BatchNormalization(axis=channel_axis, name='bn_0_freq')(melgram_input)
-
-    if normalize == 'batch':
-        pass
-    elif normalize in ('data_sample', 'time', 'freq', 'channel'):
-        x = Normalization2D(normalize, name='nomalization')(melgram_input)
-    elif normalize in ('no', 'False'):
-        x = melgram_input
-
-    # Conv 10 times..?
-    x1 = Convolution2D(2, 1)(x)
-    x1 = BatchNormalization(axis=channel_axis, name='bn1')(x1)
-    x1 = ReLU()(x1)
-    x2 = Convolution2D(4, 1)(x)
-    x2 = BatchNormalization(axis=channel_axis, name='bn2')(x2)
-    x2 = ReLU()(x2)
-    x3 = Convolution2D(6, 1)(x)
-    x3 = BatchNormalization(axis=channel_axis, name='bn3')(x3)
-    x3 = ReLU()(x3)
-    x4 = Convolution2D(8, 1)(x)
-    x4 = BatchNormalization(axis=channel_axis, name='bn4')(x4)
-    x4 = ReLU()(x4)
-    x5 = Convolution2D(10, 1)(x)
-    x5 = BatchNormalization(axis=channel_axis, name='bn5')(x5)
-    x5 = ReLU()(x5)
-    x6 = Convolution2D(12, 1)(x)
-    x6 = BatchNormalization(axis=channel_axis, name='bn6')(x6)
-    x6 = ReLU()(x6)
-    x7 = Convolution2D(14, 1)(x)
-    x7 = BatchNormalization(axis=channel_axis, name='bn7')(x7)
-    x7 = ReLU()(x7)
-    x8 = Convolution2D(16, 1)(x)
-    x8 = BatchNormalization(axis=channel_axis, name='bn8')(x8)
-    x8 = ReLU()(x8)
-    x9 = Convolution2D(18, 1)(x)
-    x9 = BatchNormalization(axis=channel_axis, name='bn9')(x9)
-    x9 = ReLU()(x9)
-    x10 = Convolution2D(24, 1)(x)
-    x10 = BatchNormalization(axis=channel_axis, name='bn10')(x10)
-    x10 = ReLU()(x10)
-
-    # concat 10 results..?
-    x = torch.cat([x1, x2, x3, x4, x5, x6, x7, x8, x9, x10], dim=2)
-
-    x = MaxPooling2D(pool_size=(10, 4), name='pool1')(x)
-
-    # 2nd Conv
-    x = Convolution2D(5, 5)(x)
-    x = BatchNormalization(axis=channel_axis, name='bn22')(x)
-    x = ReLU()(x)
-    x = MaxPooling2D(pool_size=(10, 2), name='pool2')(x)
-
-    return x
-
-def biCNN():
-    # implemented based on paper, 'Acoustic Scene Classification Using Bilinear Pooling on Time-liked and
-    # Frequency-liked Convolution Neural Network
-    # HCNN과 PCNN을 각각 받아서 Bilinear Pooling을 한 후 softmax 적용
-    return
-'''
-def CompactCNN(input_shape, nb_conv, nb_filters, n_mels, normalize, nb_hidden, dense_units,
-               output_shape, activation, dropout, multiple_segments=False, graph_model=False, input_tensor=None):
-
-    melgram_input = Input(shape=input_shape)
-
-    if n_mels >= 256:
-        poolings = [(2, 4), (4, 4), (4, 5), (2, 4), (4, 4)]
-    elif n_mels >= 128:
-        poolings = [(2, 4), (4, 5), (4, 8), (4, 7), (4, 4)]
-    elif n_mels >= 96:
-        poolings = [(2, 4), (4, 5), (3, 8), (4, 7), (4, 3)] #(2, 8), (4, 3)]
-    elif n_mels >= 72:
-        poolings = [(2, 4), (3, 4), (2, 5), (2, 4), (3, 4)]
-    elif n_mels >= 64:
-        poolings = [(2, 4), (2, 4), (2, 5), (2, 4), (4, 4)]
-    elif n_mels >= 48: # 우리의 케이스로 보임)
-        poolings = [(2, 4), (4, 5), (3, 8), (2, 7), (4, 4)]
-    elif n_mels >= 32:
-        poolings = [(2, 4), (2, 5), (3, 8), (2, 7), (4, 4)]
-    elif n_mels >= 24:
-        poolings = [(2, 4), (2, 4), (3, 8), (2, 8), (4, 4)]
-    elif n_mels >= 16:
-        poolings = [(2, 4), (2, 5), (2, 8), (2, 7), (4, 4)]
-    elif n_mels >= 8:
-        poolings = [(2, 4), (2, 4), (2, 8), (1, 8), (4, 4)]
-
-    # Determine input axis
-    if keras.backend.image_data_format() == 'th':
-        channel_axis = 1
-        freq_axis = 2
-        time_axis = 3
-    else:
-        channel_axis = 3
-        freq_axis = 1
-        time_axis = 2
-
-    # Input block
-    x = BatchNormalization(axis=channel_axis, name='bn_0_freq')(melgram_input)
-
-    if normalize == 'batch':
-        pass
-    elif normalize in ('data_sample', 'time', 'freq', 'channel'):
-        x = Normalization2D(normalize, name='nomalization')(melgram_input)
-    elif normalize in ('no', 'False'):
-        x = melgram_input
-
-    # Conv block 1
-    x = Convolution2D(nb_filters[0], (3, 3), padding='same')(x)
-    x = BatchNormalization(axis=channel_axis, name='bn1')(x)
-    x = ELU()(x)
-    x = MaxPooling2D(pool_size=poolings[0], name='pool1')(x)
-
-    # Conv block 2
-    x = Convolution2D(nb_filters[1], (3, 3), padding='same')(x)
-    x = BatchNormalization(axis=channel_axis, name='bn2')(x)
-    x = ELU()(x)
-    x = MaxPooling2D(pool_size=poolings[1], name='pool2')(x)
-
-    # Conv block 3
-    x = Convolution2D(nb_filters[2], (3, 3), padding='same')(x)
-    x = BatchNormalization(axis=channel_axis, name='bn3')(x)
-    x = ELU()(x)
-    x = MaxPooling2D(pool_size=poolings[2], name='pool3')(x)
-
-    # Conv block 4
-    if nb_conv > 3:
-        x = Convolution2D(nb_filters[3], (3, 3), padding='same')(x)
-        x = BatchNormalization(axis=channel_axis, name='bn4')(x)
-        x = ELU()(x)
-        x = MaxPooling2D(pool_size=poolings[3], name='pool4')(x)
-
-    # Conv block 5
-    if nb_conv == 5:
-        x = Convolution2D(nb_filters[4], (3, 3), padding='same')(x)
-        x = BatchNormalization(axis=channel_axis, name='bn5')(x)
-        x = ELU()(x)
-        x = MaxPooling2D(pool_size=poolings[4], name='pool5')(x)
-
-    # Flatten the outout of the last Conv Layer
-    x = Flatten()(x)
-
-    if nb_hidden == 1:
-        x = Dropout(dropout)(x)
-        x = Dense(dense_units, activation='relu')(x)
-    elif nb_hidden == 2:
-        x = Dropout(dropout)(x)
-        x = Dense(dense_units[0], activation='relu')(x)
-        x = Dropout(dropout)(x)
-        x = Dense(dense_units[1], activation='relu')(x)
-    else:
-        pass
-
-    # Output Layer
-    x = Dense(output_shape, activation=activation, name = 'output')(x)
-
-    # Create model
-    model = Model(melgram_input, x)
-
-    return model
-
 class TestCallback(keras.callbacks.Callback):
     def __init__(self, test_data, test_classes, val_set, val_classes):
         self.test_data = test_data
@@ -439,7 +185,7 @@ class TestCallback(keras.callbacks.Callback):
 
 
 def batch_block_generator(train_set, item_vecs_reg, batch_size=32, dimms="200"):
-    block_step = 50000
+    block_step = 10000
     n_train = len(train_set)
     randomize = True
     while 1:
@@ -510,18 +256,6 @@ if __name__ == "__main__":
     # the loss in this case MSE
     loss = 'mean_squared_error'
 
-    # number of Convolutional Layers
-    nb_conv_layers = 4
-
-    # number of Filters in each layer
-    nb_filters = [128, 384, 768, 2048]
-    # nb_filters = [32, 96, 192, 512]
-
-    # number of hidden layers at the end of the model
-    nb_hidden = 0
-    dense_units = 200
-    # dense_units = 50
-
     # which activation function to use for OUTPUT layer
     # IN A MULTI-LABEL TASK with N classes we use SIGMOID activation same as with a BINARY task
     # as EACH of the classes can be 0 or 1
@@ -540,12 +274,6 @@ if __name__ == "__main__":
     output_shape = item_vecs_reg.shape[1]
 
     # Optimizers
-
-    # simple case:
-    # Stochastic Gradient Descent
-    #optimizer = 'sgd'
-
-    # advanced:
     sgd = optimizers.SGD(momentum=0.9, nesterov=True)
 
     # We use mostly ADAM
@@ -565,12 +293,7 @@ if __name__ == "__main__":
 
     import tensorflow as tf
     # 이 부분을 Bilinear CNN으로 수정..!
-    # model = CompactCNN
-    model = SubSpec(input_shape, n_mels = input_shape[0],
-                               normalize=normalization,
-                               nb_hidden = nb_hidden, dense_units = dense_units,
-                               output_shape = output_shape, activation = output_activation,
-                               dropout = dropout)
+    model = SubSpec(input_shape, output_shape = output_shape, activation = output_activation, dropout = dropout)
     model.summary()
 
     # COMPILE MODEL
