@@ -185,7 +185,7 @@ class TestCallback(keras.callbacks.Callback):
 
 
 def batch_block_generator(train_set, item_vecs_reg, batch_size=32, dimms="200"):
-    block_step = 10000
+    block_step = 5024
     n_train = len(train_set)
     randomize = True
     while 1:

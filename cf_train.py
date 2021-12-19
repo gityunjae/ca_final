@@ -4,7 +4,7 @@ import json
 import struct
 
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
-os.environ["CUDA_VISIBLE_DEVICES"]="1" #"0,1,2,3"
+os.environ["CUDA_VISIBLE_DEVICES"]="0" #"0,1,2,3"
 
 import random as rnd
 from scipy import sparse
@@ -152,7 +152,7 @@ def load_data(train_file, model_folder):
             curr_rows = rows['train']
             curr_cols = cols['train']
         else:
-            tr_ids =  track_ids['train'] +  track_ids[split]
+            tr_ids = track_ids['train'] + track_ids[split]
             curr_data = data['train'] + data[split]
             curr_rows = rows['train'] + rows[split]
             total_train = len(track_ids['train'])
@@ -173,7 +173,7 @@ if __name__ == '__main__':
     lr = '0.05'
     # Specify the location of the dataset:
     train_file = "data/train.json"
-    model_folder = 'models_split'
+    model_folder = 'cf_models_split'
 
     # Create the splits for training and testing
     load_data(train_file, model_folder)

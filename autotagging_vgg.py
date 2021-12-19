@@ -5,7 +5,7 @@ os.environ["CUDA_VISIBLE_DEVICES"]="0"
 # This is the path for mel-spectrograms
 TMP_PATH = '/HDD/storage/ca_final/dataset/arena_mel'
 # This is the path to save the model checkpoints
-MODELS_PATH = '/home/yun/yj/컴청/icassp2021/runs'
+MODELS_PATH = '/home/yun/yj/컴청/icassp2021/orig_runs'
 
 # SET GPUs to use:
  #"0,1,2,3"
@@ -182,6 +182,7 @@ def CompactCNN(input_shape, nb_conv, nb_filters, n_mels, normalize, nb_hidden, d
 
     return model
 
+
 class TestCallback(keras.callbacks.Callback):
     def __init__(self, test_data, test_classes, val_set, val_classes):
         self.test_data = test_data
@@ -211,7 +212,7 @@ class TestCallback(keras.callbacks.Callback):
 
 
 def batch_block_generator(train_set, item_vecs_reg, batch_size=32, dimms="200"):
-    block_step = 50000
+    block_step = 5024
     n_train = len(train_set)
     randomize = True
     while 1:
@@ -246,6 +247,7 @@ def step_decay(epoch):
         math.floor((1+epoch)/epochs_drop))
     return lrate
 
+
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     parser = argparse.ArgumentParser(
@@ -258,12 +260,11 @@ if __name__ == "__main__":
                         type=str,
                         default="300")
 
-
     args = parser.parse_args()
-    model_folder = "models_split"
+    model_folder = "orig_models_split"
     # train에서 10%를 test로 설정해두고 그것과 독립적으로 10%를 val set으로 설정한듯..? 왜 따로따로 설정 안했지
     item_features_file = os.path.join(model_folder, 'cf_item_{}_{}.feats'.format(args.dimms, 'train'))
-    item_ids, item_vecs_reg =  load_feats(item_features_file)
+    item_ids, item_vecs_reg = load_feats(item_features_file)
     train_item_vecs, test_item_vecs, train_item_ids, test_item_ids = train_test_split(item_vecs_reg, item_ids, test_size=0.10, random_state=42)
     train_len = len(train_item_vecs)
     print("train data: "+str(train_len))
@@ -335,11 +336,9 @@ if __name__ == "__main__":
 
     import tensorflow as tf
     # 이 부분을 Bilinear CNN으로 수정..!
-    model = CompactCNN(input_shape, nb_conv = nb_conv_layers, nb_filters= nb_filters, n_mels = input_shape[0],
-                               normalize=normalization,
-                               nb_hidden = nb_hidden, dense_units = dense_units,
-                               output_shape = output_shape, activation = output_activation,
-                               dropout = dropout)
+    model = CompactCNN(input_shape, nb_conv=nb_conv_layers, nb_filters=nb_filters, n_mels=input_shape[0],
+                       normalize=normalization, nb_hidden=nb_hidden, dense_units=dense_units,
+                       output_shape=output_shape, activation=output_activation, dropout=dropout)
     model.summary()
 
     # COMPILE MODEL
@@ -353,8 +352,9 @@ if __name__ == "__main__":
     # START TRAINING
     # epochs = 200
     # epochs = 50
+    epochs = 30
     # epochs = 3
-    epochs = 100
+    # epochs = 100
 
     history = model.fit(batch_block_generator(item_ids, item_vecs_reg, batch_size, dimms=args.dimms),
                                                                steps_per_epoch = int(len(item_ids)/batch_size),
