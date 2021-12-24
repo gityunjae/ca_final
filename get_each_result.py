@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import os
-import pickle
 import json
 import struct
+from pathlib import Path
 
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ["CUDA_VISIBLE_DEVICES"]="1" #"0,1,2,3"
@@ -21,6 +21,11 @@ import metrics
 from multiprocessing import Pool
 
 rnd.seed(0)
+
+with open('data/song_meta.json', 'r') as json_file:
+    song_info = json.load(json_file)
+with open('data/train.json', 'r') as json_file:
+    ply_info = json.load(json_file)
 
 def save(keys, feats, out_fname):
     ''' Method used to save a list of element ids and the corresponing vectos
@@ -49,42 +54,70 @@ def load_feats(feat_fname, meta_only=False, nrz=False):
             feat = feat / np.sqrt((feat ** 2).sum(-1) + 1e-8)[..., np.newaxis]
     return keys, feat
 
+
 latents_files = {'1': 7, '5': 1, '8': 1}
+
+
+def song_id_to_info(sid: str) -> dict:
+    info = dict()
+    for j in song_info:
+        if str(j["id"]) == str(sid):
+            info = dict({"id": j["id"], "album_name": j["album_name"], "songs": j["song_name"],
+                         "artist": j["artist_name_basket"]})
+        else:
+            pass
+    return info
+
+
+def get_songs(pid: str) -> dict:
+    info = dict()
+    for p in ply_info:
+        if str(p["id"]) == str(pid):
+            info = dict({"id": p["id"], "plylst_title": p["plylst_title"], "songs": p["songs"], "tags": p["tags"]})
+        else:
+            pass
+    return info
+
 
 if __name__ == '__main__':
 
     N = 10
     # N = 8
     dims = "300"
-    model_folder = 'final_orig_models_split'
+    #model_folder = 'models_split'
+    model_folder = 'models_split(orig)'
+    reEx = []
     for split in ['train', '8', '5', '1']:
         # We first load all data for the current split
         tracks_ids = json.load(open(os.path.join(model_folder, 'track_ids_{}.json'.format(split)), 'r'))
         playlists_ids = json.load(open(os.path.join(model_folder, 'playlists_ids_{}.json'.format(split)), 'r'))
 
+        # cf_train 결과물
         item_features_file = os.path.join(model_folder, 'cf_item_{}_{}.feats'.format(dims, split))
         test_ids, track_orig_vects = load_feats(item_features_file)
 
-
         if split != 'train':
             pred_test_ids = []
-            pred_vecs  = []
+            pred_vecs = []
+            pred_test_ids2, pred_vecs2 = [], []
             for i in range(latents_files[split]):
                 curr_test_ids, curr_orig_vecs = load_feats(os.path.join(model_folder,
-                                                                        "test_pred_{}_{}.npy".format(split, i*5024)))
-                # why 50000?
-                pred_test_ids +=  curr_test_ids
+                                                                        "test_pred_{}_{}.npy".format(split, i*50000)))
+
+                pred_test_ids += curr_test_ids
                 pred_vecs.append(curr_orig_vecs)
+            # pred_test_ids, pred_vecs 는 autotaggin한 결
             pred_vecs = np.vstack(curr_orig_vecs)
 
+            # train을 제외한 8,5,1 에 대한 ply ids
             playlists_test = json.load(open(os.path.join(model_folder, 'test_cf_playlists_{}.json'.format(split)), 'r'))
             #playlists_test = json.load(open(os.path.join(model_folder, 'test_playlists_{}.json'.format(split)), 'r'))
 
             # The first 81219 items are the ones used to train the model, we want to evaluate on the rest of the items
-            #test_ids = test_ids[81219:]
-            #track_orig_vects = track_orig_vects[81219:]
-            test_ids = test_ids[24187:]
-            track_orig_vects = track_orig_vects[24187:]
+            test_ids = test_ids[81219:]
+            track_orig_vects = track_orig_vects[81219:]
+            #test_ids = test_ids[24187:]
+            #track_orig_vects = track_orig_vects[24187:]
 
         else:
             playlists_test = json.load(open(os.path.join(model_folder, 'test_playlists_{}.json'.format(split)), 'r'))
@@ -95,62 +128,66 @@ if __name__ == '__main__':
         test_ids = [x for x in test_ids if x.decode() in dict_test_ids]
 
 
-        # Load the latent representations of playlists to make the predictions
+        # Load the latent representations of playlists to make the predictions 
         train_features_file = os.path.join(model_folder, 'cf_playlist_{}_{}.feats'.format(dims, 'train'))
         train_playlists_ids, train_playlists_vects = load_feats(train_features_file)
         # This are the latent representations that are used to compute the Upper Bound
         user_features_file = os.path.join(model_folder, 'cf_playlist_{}_{}.feats'.format(dims, split))
         playlists_ids, playlists_vects = load_feats(user_features_file)
 
-        print ("Start eval", split)
-        print (track_orig_vects.shape, len(test_ids))
-
         inv_dict_id = {i:k.decode() for i,k in enumerate(test_ids)}
         inv_pred_id = {i:k.decode() for i,k in enumerate(pred_test_ids)}
 
         def evaluate(pos):
             if playlists_ids[pos].decode() not in playlists_test:
-                return [],[],[]
+                return [],[],[],[]
             rets_pred = []
+            plyid = playlists_ids[pos].decode()
             gt = playlists_test[playlists_ids[pos].decode()]
             num_vals = len(gt)
             if num_vals ==0:
-                    return [],[],[]
+                    return [],[],[],[]
             y_orig = playlists_vects[pos].dot(track_orig_vects.T)
             y_pred = train_playlists_vects[pos].dot(pred_vecs.T)
             topn_orig = np.argsort(-y_orig)[:N]
-            topn_pred= np.argsort(-y_pred)[:N]
+            topn_pred = np.argsort(-y_pred)[:N*3]
             rets_orig = [int(inv_dict_id[t]) for t in topn_orig]
             rets_pred = [int(inv_pred_id[t]) for t in topn_pred]
-            return rets_orig, rets_pred, gt
+            return rets_orig, rets_pred, gt, plyid
 
-
-        ndcg_pred = []
-        ndcg_orig = []
-        ndcg_rnd= []
-        gts = []
-        res_orig = []
-        res_pred = []
-        res_rnd= []
         pool = Pool(40)
+
         for i in range(int(len(playlists_ids)/1000)):
             results = pool.map(evaluate, range(i*1000, (i+1)*1000))
-
-            for rets_orig, rets_pred, gt in results:
+            e = 0
+            for rets_orig, rets_pred, gt, ply in results:
                 if len(gt) > 0:
-                    res_orig.append(rets_orig)
-                    res_pred.append(rets_pred)
-                    rets_rnd = [int(tr) for tr in rnd.sample(dict_test_ids.keys(), N)]
-                    res_rnd.append(rets_rnd)
-                    gts.append(gt)
-                    ndcg_pred.append(metrics.ndcg(gt, rets_pred, N))
-                    ndcg_orig.append(metrics.ndcg(gt, rets_orig, N))
-                    ndcg_rnd.append(metrics.ndcg(gt, rets_rnd, N))
-        print ("MAP")
-        print ("PRED MAP@",N,": ", metrics.mapk(gts, res_pred, N))
-        print ("ORIG MAP@",N,": ", metrics.mapk(gts, res_orig, N))
-        print ("RND MAP@", N,": ", metrics.mapk(gts, res_rnd, N))
-        print ("NDCG:")
-        print ("PRED: ", np.mean(ndcg_pred))
-        print ("ORIG: ", np.mean(ndcg_orig))
-        print ("RND: ", np.mean(ndcg_rnd))
+                    if e % 999 == 0:
+                        temp = dict()
+                        temp["ply"] = ply
+                        ss = get_songs(ply)
+                        temp["ply_id"] = ss["id"]
+                        temp["ply_title"] = ss["plylst_title"]
+                        temp["ply_tags"] = ss["tags"]
+                        lgt = []
+                        for v in gt:
+                            lgt.append(song_id_to_info(v))
+                        temp["gt"] = lgt
+                        real_s = []
+                        for v in ss["songs"]:
+                            real_s.append(song_id_to_info(v))
+                        temp["real_songs"] = real_s
+                        cf_s = []
+                        for v in rets_orig:
+                            cf_s.append(song_id_to_info(v))
+                        temp["cf_preds"] = cf_s
+                        vgg_s = []
+                        for v in rets_pred:
+                            vgg_s.append(song_id_to_info(v))
+                        temp["vgg_pred"] = vgg_s
+                        reEx.append(temp)
+                        print(temp)
+                e += 1
+
+    proc_wp = Path('./results_orig.json').open('w+', encoding='UTF-8')
+    proc_wp.write(json.dumps(reEx))

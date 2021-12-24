@@ -4,7 +4,7 @@ import json
 import struct
 
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
-os.environ["CUDA_VISIBLE_DEVICES"]="0" #"0,1,2,3"
+os.environ["CUDA_VISIBLE_DEVICES"]="1" #"0,1,2,3"
 
 import random as rnd
 from scipy import sparse
@@ -172,8 +172,8 @@ if __name__ == '__main__':
     max_sampled = '40'
     lr = '0.05'
     # Specify the location of the dataset:
-    train_file = "data/train.json"
-    model_folder = 'cf_models_split'
+    train_file = "data/train_small.json"
+    model_folder = 'final_cf_models_split'
 
     # Create the splits for training and testing
     load_data(train_file, model_folder)

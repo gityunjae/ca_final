@@ -5,7 +5,7 @@ os.environ["CUDA_VISIBLE_DEVICES"]="0"
 # This is the path for mel-spectrograms
 TMP_PATH = '/HDD/storage/ca_final/dataset/arena_mel'
 # This is the path to save the model checkpoints
-MODELS_PATH = '/home/yun/yj/컴청/icassp2021/new_runs'
+MODELS_PATH = '/home/yun/yj/컴청/icassp2021/final_new_runs'
 
 # SET GPUs to use:
  #"0,1,2,3"
@@ -300,7 +300,7 @@ if __name__ == "__main__":
 
 
     args = parser.parse_args()
-    model_folder = "new_models_split"
+    model_folder = "final_new_models_split"
     # train에서 10%를 test로 설정해두고 그것과 독립적으로 10%를 val set으로 설정한듯..? 왜 따로따로 설정 안했지
     item_features_file = os.path.join(model_folder, 'cf_item_{}_{}.feats'.format(args.dimms, 'train'))
     item_ids, item_vecs_reg = load_feats(item_features_file)
@@ -370,9 +370,9 @@ if __name__ == "__main__":
     callbacks = [model_checkpoint]
     # START TRAINING
     # epochs = 200
-    epochs = 50
-    # epochs = 3
-    # epochs = 100
+    # epochs = 50
+    # epochs = 2
+    epochs = 100
 
     history = model.fit(batch_block_generator(item_ids, item_vecs_reg, batch_size, dimms=args.dimms),
                                                                steps_per_epoch = int(len(item_ids)/batch_size),

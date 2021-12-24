@@ -54,9 +54,8 @@ latents_files = {'1': 7, '5': 1, '8': 1}
 if __name__ == '__main__':
 
     N = 10
-    # N = 8
     dims = "300"
-    model_folder = 'final_orig_models_split'
+    model_folder = 'models_split(orig)'
     for split in ['train', '8', '5', '1']:
         # We first load all data for the current split
         tracks_ids = json.load(open(os.path.join(model_folder, 'track_ids_{}.json'.format(split)), 'r'))
@@ -70,9 +69,7 @@ if __name__ == '__main__':
             pred_test_ids = []
             pred_vecs  = []
             for i in range(latents_files[split]):
-                curr_test_ids, curr_orig_vecs = load_feats(os.path.join(model_folder,
-                                                                        "test_pred_{}_{}.npy".format(split, i*5024)))
-                # why 50000?
+                curr_test_ids, curr_orig_vecs = load_feats(os.path.join(model_folder, "test_pred_{}_{}.npy".format(split, i*50000)))
                 pred_test_ids +=  curr_test_ids
                 pred_vecs.append(curr_orig_vecs)
             pred_vecs = np.vstack(curr_orig_vecs)
@@ -81,11 +78,8 @@ if __name__ == '__main__':
             #playlists_test = json.load(open(os.path.join(model_folder, 'test_playlists_{}.json'.format(split)), 'r'))
 
             # The first 81219 items are the ones used to train the model, we want to evaluate on the rest of the items
-            #test_ids = test_ids[81219:]
-            #track_orig_vects = track_orig_vects[81219:]
-            test_ids = test_ids[24187:]
-            track_orig_vects = track_orig_vects[24187:]
-
+            test_ids = test_ids[81219:]
+            track_orig_vects = track_orig_vects[81219:]
         else:
             playlists_test = json.load(open(os.path.join(model_folder, 'test_playlists_{}.json'.format(split)), 'r'))
             pred_test_ids, pred_vecs = load_feats(os.path.join(model_folder, 'test_pred.npy'))

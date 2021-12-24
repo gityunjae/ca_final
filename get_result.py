@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 import os
-import pickle
 import json
 import struct
-from typing import List
+from pathlib import Path
 
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ["CUDA_VISIBLE_DEVICES"]="1" #"0,1,2,3"
@@ -86,8 +85,9 @@ if __name__ == '__main__':
     # N = 8
     dims = "300"
     #model_folder = 'models_split'
-    model_folder = 'orig_models_split'
+    model_folder = 'final_orig_models_split'
     model_folder2 = 'models_split(50ep)'
+    reEx = []
     for split in ['train', '8', '5', '1']:
         # We first load all data for the current split
         tracks_ids = json.load(open(os.path.join(model_folder, 'track_ids_{}.json'.format(split)), 'r'))
@@ -121,10 +121,10 @@ if __name__ == '__main__':
             #playlists_test = json.load(open(os.path.join(model_folder, 'test_playlists_{}.json'.format(split)), 'r'))
 
             # The first 81219 items are the ones used to train the model, we want to evaluate on the rest of the items
-            #test_ids = test_ids[81219:]
-            #track_orig_vects = track_orig_vects[81219:]
-            test_ids = test_ids[24187:]
-            track_orig_vects = track_orig_vects[24187:]
+            test_ids = test_ids[81219:]
+            track_orig_vects = track_orig_vects[81219:]
+            #test_ids = test_ids[24187:]
+            #track_orig_vects = track_orig_vects[24187:]
 
         else:
             playlists_test = json.load(open(os.path.join(model_folder, 'test_playlists_{}.json'.format(split)), 'r'))
@@ -172,32 +172,42 @@ if __name__ == '__main__':
             return rets_orig, rets_pred, rets_pred2, gt, plyid
 
         pool = Pool(40)
+
         for i in range(int(len(playlists_ids)/1000)):
             results = pool.map(evaluate, range(i*1000, (i+1)*1000))
             e = 0
             for rets_orig, rets_pred, rets_pred2, gt, ply in results:
                 if len(gt) > 0:
                     if e % 999 == 0:
-                        print("ply")
-                        print(ply)
+                        temp = dict()
+                        temp["ply"] = ply
                         ss = get_songs(ply)
-                        print("id: ", end='')
-                        print(ss["id"], end='')
-                        print(", title: ", end='')
-                        print(ss["plylst_title"], end='')
-                        print(", tags: ", end='')
-                        print(ss["tags"])
-                        print("real")
-                        # print(ss)
+                        temp["ply_id"] = ss["id"]
+                        temp["ply_title"] = ss["plylst_title"]
+                        temp["ply_tags"] = ss["tags"]
+                        lgt = []
+                        for v in gt:
+                            lgt.append(song_id_to_info(v))
+                        temp["gt"] = lgt
+                        real_s = []
                         for v in ss["songs"]:
-                            print(song_id_to_info(v))
-                        print("orig_cf")
+                            real_s.append(song_id_to_info(v))
+                        temp["real_songs"] = real_s
+                        cf_s = []
                         for v in rets_orig:
-                            print(song_id_to_info(v))
-                        print("pred_vgg")
+                            cf_s.append(song_id_to_info(v))
+                        temp["cf_preds"] = cf_s
+                        vgg_s = []
                         for v in rets_pred:
-                            print(song_id_to_info(v))
-                        print("pred_ss")
+                            vgg_s.append(song_id_to_info(v))
+                        temp["vgg_pred"] = vgg_s
+                        ss_s = []
                         for v in rets_pred2:
-                            print(song_id_to_info(v))
+                            ss_s.append(song_id_to_info(v))
+                        temp["vgg2_pred"] = ss_s
+                        reEx.append(temp)
+                        print(temp)
                 e += 1
+
+    proc_wp = Path('./results_50_new_2.json').open('w+', encoding='UTF-8')
+    proc_wp.write(json.dumps(reEx))
