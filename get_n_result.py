@@ -85,7 +85,20 @@ if __name__ == '__main__':
     # N = 8
     dims = "300"
     #model_folder = 'models_split'
-    model_folder = 'models_split(orig)'
+    model_folder = 'final_orig_models_split'
+    ids = [26777, 152444, 68360, 54333, 134799, 7723, 17267, 76793, 84101, 138008, 91299, 133215, 93955, 99882, 66767,
+           67974, 149257, 147606, 95781, 54333, 14855, 96692, 38909, 132207, 120225, 114498, 14738, 87595, 70740, 87414,
+           21732, 147034, 29382, 53957, 108010, 66350, 64800, 127734, 71192, 98525, 52927, 146256, 48538, 11579, 2775,
+           17335, 77260, 151812, 136370, 70392, 118028, 109017, 95781, 68360, 141296, 128988, 83298, 7723, 17267,
+           114498, 23317, 87595, 70740, 87414, 94372, 40222, 133719, 14833, 60423, 21732, 116718, 83129, 29382, 108010,
+           35723, 56219, 133215, 64800, 361, 93955, 127734, 48898, 71192, 151821, 98525, 52927, 11313, 146256, 48538,
+           99882, 143996, 21452, 25449, 120477, 22137, 11579, 17335, 7486, 70613, 100105, 55659, 17520, 104560, 59911,
+           2378, 89186, 94831, 135665, 70392, 118028, 147606, 128988, 24015, 7723, 96692, 30366, 132207, 107321, 120225,
+           14738, 3541, 70740, 87414, 86710, 34546, 40222, 11382, 21732, 18153, 94683, 83129, 29382, 91299, 48421,
+           35723, 66350, 64800, 132507, 361, 66239, 93955, 127734, 151821, 98525, 52927, 38559, 146256, 48538, 99882,
+           143996, 21452, 11943, 21315, 22137, 11579, 2775, 7486, 100105, 55659, 40007, 17520, 151812, 90084, 85799,
+           59911, 34283, 2378, 135665, 93845, 147606]
+
     reEx = []
     for split in ['train', '8', '5', '1']:
         # We first load all data for the current split
@@ -102,7 +115,7 @@ if __name__ == '__main__':
             pred_test_ids2, pred_vecs2 = [], []
             for i in range(latents_files[split]):
                 curr_test_ids, curr_orig_vecs = load_feats(os.path.join(model_folder,
-                                                                        "test_pred_{}_{}.npy".format(split, i*50000)))
+                                                                        "test_pred_{}_{}.npy".format(split, i*5024)))
 
                 pred_test_ids += curr_test_ids
                 pred_vecs.append(curr_orig_vecs)
@@ -114,10 +127,10 @@ if __name__ == '__main__':
             #playlists_test = json.load(open(os.path.join(model_folder, 'test_playlists_{}.json'.format(split)), 'r'))
 
             # The first 81219 items are the ones used to train the model, we want to evaluate on the rest of the items
-            test_ids = test_ids[81219:]
-            track_orig_vects = track_orig_vects[81219:]
-            #test_ids = test_ids[24187:]
-            #track_orig_vects = track_orig_vects[24187:]
+            #test_ids = test_ids[81219:]
+            #track_orig_vects = track_orig_vects[81219:]
+            test_ids = test_ids[24187:]
+            track_orig_vects = track_orig_vects[24187:]
 
         else:
             playlists_test = json.load(open(os.path.join(model_folder, 'test_playlists_{}.json'.format(split)), 'r'))
@@ -156,18 +169,15 @@ if __name__ == '__main__':
             return rets_orig, rets_pred, gt, plyid
 
         pool = Pool(40)
-
         for i in range(int(len(playlists_ids)/1000)):
             results = pool.map(evaluate, range(i*1000, (i+1)*1000))
-            e = 0
             for rets_orig, rets_pred, gt, ply in results:
                 if len(gt) > 0:
-                    print(e)
-                    if e % 99 == 0:
-                        temp = dict()
-                        temp["ply"] = ply
-                        ss = get_songs(ply)
-                        temp["ply_id"] = ss["id"]
+                    temp = dict()
+                    temp["ply"] = ply
+                    ss = get_songs(ply)
+                    temp["ply_id"] = ss["id"]
+                    if temp["ply_id"] in ids:
                         temp["ply_title"] = ss["plylst_title"]
                         temp["ply_tags"] = ss["tags"]
                         lgt = []
@@ -187,10 +197,8 @@ if __name__ == '__main__':
                             vgg_s.append(song_id_to_info(v))
                         temp["vgg_pred"] = vgg_s
                         reEx.append(temp)
-                        # print(temp)
-                e += 1
+                        print(temp)
 
 
-
-    proc_wp = Path('./results_orig.json').open('w+', encoding='UTF-8')
+    proc_wp = Path('./results_small.json').open('w+', encoding='UTF-8')
     proc_wp.write(json.dumps(reEx))
